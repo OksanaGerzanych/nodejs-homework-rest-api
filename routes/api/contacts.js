@@ -8,7 +8,12 @@ const { HttpError } = require("../../helpers");
 const router = express.Router();
 
 const addSchema = Joi.object({
-  name: Joi.string().alphanum().min(3).max(30).required(),
+  name: Joi.string()
+    .regex(/^[\p{L}\s]+$/u)
+    .min(3)
+    .max(30)
+    .trim()
+    .required(),
 
   email: Joi.string()
     .email({
@@ -16,7 +21,12 @@ const addSchema = Joi.object({
       tlds: { allow: ["com", "net"] },
     })
     .required(),
-  phone: Joi.string().required(),
+  phone: Joi.string()
+    .regex(/^[\d\-+\s()]+$/)
+    .min(10)
+    .max(15)
+    .trim()
+    .required(),
 });
 
 router.get("/", async (req, res, next) => {
@@ -28,10 +38,10 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/:contactId", async (req, res, next) => {
+router.get("/:id", async (req, res, next) => {
   try {
-    const { contactId } = req.params;
-    const result = await contacts.getContactById(contactId);
+    const { id } = req.params;
+    const result = await contacts.getContactById(id);
 
     if (!result) {
       throw HttpError(404, "Not found contact by this id");
@@ -55,18 +65,27 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-// router.delete('/:contactId', async (req, res, next) => {
-//   res.json({ message: 'template message' })
-// })
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await contacts.removeContact(id);
+    if (!result) {
+      throw HttpError(404, "Not found");
+    }
+    res.json({ message: "Contact deleted" });
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.put("/:contactId", async (req, res, next) => {
+router.put("/:id", async (req, res, next) => {
   try {
     const { error } = addSchema.validate(req.body);
     if (error) {
       throw HttpError(400, (message = "missing fields"));
     }
-    const { contactId } = req.params;
-    const result = await contacts.updateContact(contactId, req.body);
+    const { id } = req.params;
+    const result = await contacts.updateContact(id, req.body);
     if (!result) {
       throw HttpError(404, "Not found");
     }
