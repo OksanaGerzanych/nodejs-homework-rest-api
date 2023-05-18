@@ -1,47 +1,24 @@
 const express = require("express");
-
-const Joi = require("joi");
-
-const contacts = require("../../models/contacts");
+const { schemas } = require("../../models/contact");
+const { Contact } = require("../../models/contact");
+const { isValidId } = require("../../middlewares");
 const { HttpError } = require("../../helpers");
 
 const router = express.Router();
 
-const addSchema = Joi.object({
-  name: Joi.string()
-    .regex(/^[\p{L}\s]+$/u)
-    .min(3)
-    .max(30)
-    .trim()
-    .required(),
-
-  email: Joi.string()
-    .email({
-      minDomainSegments: 2,
-      tlds: { allow: ["com", "net"] },
-    })
-    .required(),
-  phone: Joi.string()
-    .regex(/^[\d\-+\s()]+$/)
-    .min(10)
-    .max(15)
-    .trim()
-    .required(),
-});
-
 router.get("/", async (req, res, next) => {
   try {
-    const result = await contacts.listContacts();
+    const result = await Contact.find();
     res.json(result);
   } catch (error) {
     next(error);
   }
 });
 
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", isValidId, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const result = await contacts.getContactById(id);
+    const result = await Contact.findById(id);
 
     if (!result) {
       throw HttpError(404, "Not found contact by this id");
@@ -54,21 +31,21 @@ router.get("/:id", async (req, res, next) => {
 
 router.post("/", async (req, res, next) => {
   try {
-    const { error } = addSchema.validate(req.body);
+    const { error } = schemas.addSchema.validate(req.body);
     if (error) {
       throw HttpError(400, (message = "missing required name field"));
     }
-    const result = await contacts.addContact(req.body);
+    const result = await Contact.create(req.body);
     res.status(201).json(result);
   } catch (error) {
     next(error);
   }
 });
 
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", isValidId, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const result = await contacts.removeContact(id);
+    const result = await Contact.findByIdAndRemove(id);
     if (!result) {
       throw HttpError(404, "Not found");
     }
@@ -78,14 +55,31 @@ router.delete("/:id", async (req, res, next) => {
   }
 });
 
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", isValidId, async (req, res, next) => {
   try {
-    const { error } = addSchema.validate(req.body);
+    const { error } = schemas.addSchema.validate(req.body);
     if (error) {
       throw HttpError(400, (message = "missing fields"));
     }
     const { id } = req.params;
-    const result = await contacts.updateContact(id, req.body);
+    const result = await Contact.findByIdAndUpdate(id, req.body, { new: true });
+    if (!result) {
+      throw HttpError(404, "Not found");
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/:id/favorite", isValidId, async (req, res, next) => {
+  try {
+    const { error } = schemas.updateFavoriteSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, (message = "missing field favorite"));
+    }
+    const { id } = req.params;
+    const result = await Contact.findByIdAndUpdate(id, req.body, { new: true });
     if (!result) {
       throw HttpError(404, "Not found");
     }
