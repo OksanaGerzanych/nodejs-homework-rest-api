@@ -1,57 +1,90 @@
-const fs = require("fs/promises");
-const { nanoid } = require("nanoid");
+const { Contact } = require("../models/contact");
+const { HttpError } = require("../helpers");
+const { schemas } = require("../models/contact");
 
-const path = require("path");
-const contactsPath = path.join(__dirname, "contacts.json");
-
-const listContacts = async () => {
-  const data = await fs.readFile(contactsPath);
-  return JSON.parse(data);
-};
-
-const getContactById = async (id) => {
-  const contacts = await listContacts();
-  const contactById = contacts.find((contact) => contact.id === id);
-  return contactById || null;
-};
-
-const addContact = async (body) => {
-  const contacts = await listContacts();
-  const newContact = {
-    id: nanoid(),
-    ...body,
-  };
-  contacts.push(newContact);
-  await fs.writeFile(contactsPath, JSON.stringify(contacts, null, 2));
-  return newContact;
-};
-
-const removeContact = async (id) => {
-  const contacts = await listContacts();
-  const index = contacts.findIndex((contact) => contact.id === id);
-  if (index === -1) {
-    return null;
+const getAllContacts = async (req, res, next) => {
+  try {
+    const result = await Contact.find();
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
-  const [result] = contacts.splice(index, 1);
-  await fs.writeFile(contactsPath, JSON.stringify(contacts, null, 2));
-  return result;
 };
+const getContactById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await Contact.findById(id);
 
-const updateContact = async (id, body) => {
-  const contacts = await listContacts();
-  const index = contacts.findIndex((contact) => contact.id === id);
-  if (index === -1) {
-    return null;
+    if (!result) {
+      throw HttpError(404, "Not found contact by this id");
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
-  contacts[index] = { id, ...body };
-  await fs.writeFile(contactsPath, JSON.stringify(contacts, null, 2));
-  return contacts[index];
+};
+const addContact = async (req, res, next) => {
+  try {
+    const { error } = schemas.addSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, (message = "missing required name field"));
+    }
+    const result = await Contact.create(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+const removeContact = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await Contact.findByIdAndRemove(id);
+    if (!result) {
+      throw HttpError(404, "Not found");
+    }
+    res.json({ message: "Contact deleted" });
+  } catch (error) {
+    next(error);
+  }
+};
+const updateContact = async (req, res, next) => {
+  try {
+    const { error } = schemas.addSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, (message = "missing fields"));
+    }
+    const { id } = req.params;
+    const result = await Contact.findByIdAndUpdate(id, req.body, { new: true });
+    if (!result) {
+      throw HttpError(404, "Not found");
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+const updateStatusContact = async (req, res, next) => {
+  try {
+    const { error } = schemas.updateFavoriteSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, (message = "missing field favorite"));
+    }
+    const { id } = req.params;
+    const result = await Contact.findByIdAndUpdate(id, req.body, { new: true });
+    if (!result) {
+      throw HttpError(404, "Not found");
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 module.exports = {
-  listContacts,
+  getAllContacts,
   getContactById,
   addContact,
   removeContact,
   updateContact,
+  updateStatusContact,
 };
