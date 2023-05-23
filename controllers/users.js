@@ -6,10 +6,10 @@ const { SECRET_KEY } = process.env;
 
 const register = async (req, res, next) => {
   try {
-    // const { error } = schemas.registerSchema.validate(req.body);
-    // if (error) {
-    //   throw HttpError(400, (message = "Invalid field value"));
-    // }
+    const { error } = schemas.registerSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, (message = "Invalid field value"));
+    }
     const { email, password } = req.body;
     const user = await User.findOne({ email });
     if (user) {
