@@ -1,6 +1,8 @@
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const { User, schemas } = require("../models/user");
 const { HttpError } = require("../helpers");
+const { SECRET_KEY } = process.env;
 
 const register = async (req, res, next) => {
   try {
@@ -27,6 +29,35 @@ const register = async (req, res, next) => {
   }
 };
 
+const login = async (req, res, next) => {
+  try {
+    const { error } = schemas.loginSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, (message = "Invalid field value"));
+    }
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw HttpError(401, "Email or password wrong");
+    }
+    const passwordCompare = await bcrypt.compare(password, user.password);
+    if (!passwordCompare) {
+      throw HttpError(401, "Email or password invalid");
+    }
+
+    const payload = {
+      id: user.id,
+    };
+    const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "2d" });
+    res.json({
+      token,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
+  login,
 };
