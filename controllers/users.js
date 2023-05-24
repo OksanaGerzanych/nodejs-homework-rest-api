@@ -57,7 +57,15 @@ const login = async (req, res, next) => {
   }
 };
 
+const getCurrent = async (req, res, next) => {
+  const { email } = req.user;
+  res.json = {
+    email,
+  };
+};
+
 module.exports = {
   register,
   login,
+  getCurrent,
 };
