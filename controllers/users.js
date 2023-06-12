@@ -4,9 +4,10 @@ const gravatar = require("gravatar");
 const path = require("path");
 const Jimp = require("jimp");
 const fs = require("fs/promises");
+const { nanoid } = require("nanoid");
 const { User, schemas } = require("../models/user");
-const { HttpError } = require("../helpers");
-const { SECRET_KEY } = process.env;
+const { HttpError, sendEmail } = require("../helpers");
+const { SECRET_KEY, PROJECT_URL } = process.env;
 
 const avatarsDir = path.join(__dirname, "../", "public", "avatars");
 
@@ -23,12 +24,21 @@ const register = async (req, res, next) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const avatarURL = gravatar.url(email);
+    const verificationToken = nanoid();
 
     const newUser = await User.create({
       ...req.body,
       password: hashedPassword,
       avatarURL,
+      verificationToken,
     });
+
+    const verifyEmail = {
+      to: email,
+      subject: "Verification successful",
+      html: `<a target="_blank" href="${PROJECT_URL}/api/users/verify/${verificationToken}" >Click to verify email</a>`,
+    };
+    await sendEmail(verifyEmail);
     res.status(201).json({
       email: newUser.email,
     });
@@ -45,7 +55,7 @@ const login = async (req, res, next) => {
     }
     const { email, password } = req.body;
     const user = await User.findOne({ email });
-    if (!user) {
+    if (!user || !user.verify) {
       throw HttpError(401, "Email or password wrong");
     }
     const passwordCompare = await bcrypt.compare(password, user.password);
@@ -115,10 +125,54 @@ const updateAvatar = async (req, res, next) => {
   }
 };
 
+const verify = async (req, res, next) => {
+  try {
+    const { verificationToken } = req.params;
+    const user = await User.findOne({ verificationToken });
+    if (!user) {
+      throw HttpError(404, "User not found");
+    }
+    await User.findByIdAndUpdate(user._id, { verify: true, verifyToken: "" });
+
+    res.json({ message: "Verification successful" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const resendVerifyEmail = async (req, res, next) => {
+  try {
+    const { error } = schemas.emailSchema.validate(req.body);
+    if (error) {
+      throw HttpError(400, "Invalid field value");
+    }
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw HttpError(404, "Not found user");
+    }
+    if (user.verify) {
+      throw HttpError(400, "Verification has already been passed");
+    }
+    const verifyEmail = {
+      to: email,
+      subject: "Verification successful",
+      html: `<a target="_blank" href="${PROJECT_URL}/api/users/verify/${user.verificationToken}" >Click to verify email</a>`,
+    };
+    await sendEmail(verifyEmail);
+    res.json({
+      message: "Verification email sent",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 module.exports = {
   register,
   login,
   getCurrent,
   logout,
   updateAvatar,
+  verify,
+  resendVerifyEmail,
 };
